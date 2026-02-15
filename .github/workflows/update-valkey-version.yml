@@ -44,48 +44,131 @@ jobs:
           echo "current_version=$CURRENT" >> $GITHUB_OUTPUT
           echo "Current appVersion: $CURRENT"
 
-      - name: Compare versions
-        id: compare
+      - name: Compare Valkey versions
+        id: compare-valkey
         run: |
           DETECTED="${{ steps.get-version.outputs.detected_version }}"
           CURRENT="${{ steps.current-version.outputs.current_version }}"
 
           if [ "$DETECTED" != "$CURRENT" ]; then
-            echo "needs_update=true" >> $GITHUB_OUTPUT
-            echo "Version mismatch detected: $CURRENT -> $DETECTED"
+            echo "valkey_needs_update=true" >> $GITHUB_OUTPUT
+            echo "Valkey version mismatch: $CURRENT -> $DETECTED"
           else
-            echo "needs_update=false" >> $GITHUB_OUTPUT
-            echo "Version is up to date: $CURRENT"
+            echo "valkey_needs_update=false" >> $GITHUB_OUTPUT
+            echo "Valkey version is up to date: $CURRENT"
           fi
 
-      - name: Update Chart.yaml
-        if: steps.compare.outputs.needs_update == 'true'
+      - name: Get latest redis-exporter version from GitHub
+        id: get-exporter-version
+        run: |
+          # Get latest release from GitHub API
+          LATEST=$(curl -s https://api.github.com/repos/oliver006/redis_exporter/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+
+          if [ -z "$LATEST" ]; then
+            echo "Failed to detect redis-exporter version"
+            exit 1
+          fi
+
+          echo "detected_exporter_version=$LATEST" >> $GITHUB_OUTPUT
+          echo "Detected redis-exporter version: $LATEST"
+
+      - name: Get current redis-exporter version from values.yaml
+        id: current-exporter-version
+        run: |
+          # Extract tag from metrics section (more robust method)
+          CURRENT=$(awk '/^metrics:/,/^[a-z]+:/ {if (/^\s+tag:/) {print $2; exit}}' values.yaml | tr -d '"')
+          echo "current_exporter_version=$CURRENT" >> $GITHUB_OUTPUT
+          echo "Current redis-exporter version: $CURRENT"
+
+      - name: Compare redis-exporter versions
+        id: compare-exporter
+        run: |
+          DETECTED="${{ steps.get-exporter-version.outputs.detected_exporter_version }}"
+          CURRENT="${{ steps.current-exporter-version.outputs.current_exporter_version }}"
+
+          if [ "$DETECTED" != "$CURRENT" ]; then
+            echo "exporter_needs_update=true" >> $GITHUB_OUTPUT
+            echo "Redis-exporter version mismatch: $CURRENT -> $DETECTED"
+          else
+            echo "exporter_needs_update=false" >> $GITHUB_OUTPUT
+            echo "Redis-exporter version is up to date: $CURRENT"
+          fi
+
+      - name: Check if any update is needed
+        id: compare
+        run: |
+          VALKEY_UPDATE="${{ steps.compare-valkey.outputs.valkey_needs_update }}"
+          EXPORTER_UPDATE="${{ steps.compare-exporter.outputs.exporter_needs_update }}"
+
+          if [ "$VALKEY_UPDATE" == "true" ] || [ "$EXPORTER_UPDATE" == "true" ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "Updates needed - Valkey: $VALKEY_UPDATE, Exporter: $EXPORTER_UPDATE"
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "All versions are up to date"
+          fi
+
+      - name: Update redis-exporter version
+        if: steps.compare-exporter.outputs.exporter_needs_update == 'true'
+        run: |
+          NEW_EXPORTER_VERSION="${{ steps.get-exporter-version.outputs.detected_exporter_version }}"
+
+          # Update values.yaml
+          sed -i "/metrics:/,/pullPolicy:/ s|tag: .*|tag: \"$NEW_EXPORTER_VERSION\"|" values.yaml
+
+          # Update values.schema.json
+          sed -i "s|\"default\": \"v[0-9]*\.[0-9]*\.[0-9]*\"|\"default\": \"$NEW_EXPORTER_VERSION\"|g" values.schema.json
+
+          # Update Chart.yaml annotations (redis-exporter image reference)
+          sed -i "s|oliver006/redis_exporter:v[0-9]*\.[0-9]*\.[0-9]*|oliver006/redis_exporter:$NEW_EXPORTER_VERSION|g" Chart.yaml
+
+          echo "Updated redis-exporter to $NEW_EXPORTER_VERSION"
+
+      - name: Update Valkey version in Chart.yaml
+        if: steps.compare-valkey.outputs.valkey_needs_update == 'true'
         run: |
           NEW_VERSION="${{ steps.get-version.outputs.detected_version }}"
 
           # Update appVersion in Chart.yaml
           sed -i "s/^appVersion: .*/appVersion: \"$NEW_VERSION\"/" Chart.yaml
 
+          echo "Updated Valkey appVersion to $NEW_VERSION"
+
+      - name: Bump chart version
+        if: steps.compare.outputs.needs_update == 'true'
+        run: |
           # Bump patch version of chart
           CHART_VERSION=$(grep '^version:' Chart.yaml | awk '{print $2}')
-          # Simple patch bump (you might want to use semver tool for production)
           NEW_CHART_VERSION=$(echo $CHART_VERSION | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
           sed -i "s/^version: .*/version: $NEW_CHART_VERSION/" Chart.yaml
 
-          echo "Updated appVersion to $NEW_VERSION"
           echo "Updated chart version to $NEW_CHART_VERSION"
 
       - name: Update CHANGELOG
         if: steps.compare.outputs.needs_update == 'true'
         run: |
-          NEW_VERSION="${{ steps.get-version.outputs.detected_version }}"
           CHART_VERSION=$(grep '^version:' Chart.yaml | awk '{print $2}')
           DATE=$(date +%Y-%m-%d)
+          VALKEY_UPDATE="${{ steps.compare-valkey.outputs.valkey_needs_update }}"
+          EXPORTER_UPDATE="${{ steps.compare-exporter.outputs.exporter_needs_update }}"
+          NEW_VALKEY="${{ steps.get-version.outputs.detected_version }}"
+          OLD_VALKEY="${{ steps.current-version.outputs.current_version }}"
+          NEW_EXPORTER="${{ steps.get-exporter-version.outputs.detected_exporter_version }}"
+          OLD_EXPORTER="${{ steps.current-exporter-version.outputs.current_exporter_version }}"
 
           # Create or update CHANGELOG
           if [ ! -f CHANGELOG.md ]; then
             echo "# Changelog" > CHANGELOG.md
             echo "" >> CHANGELOG.md
+          fi
+
+          # Build changelog entry
+          CHANGES=""
+          if [ "$VALKEY_UPDATE" == "true" ]; then
+            CHANGES="${CHANGES}- Updated Valkey from $OLD_VALKEY to $NEW_VALKEY (from Chainguard latest image)\n"
+          fi
+          if [ "$EXPORTER_UPDATE" == "true" ]; then
+            CHANGES="${CHANGES}- Updated redis-exporter from $OLD_EXPORTER to $NEW_EXPORTER\n"
           fi
 
           # Add new entry using a temp file (compatible with both Linux and macOS)
@@ -95,10 +178,31 @@ jobs:
             echo "## [$CHART_VERSION] - $DATE"
             echo ""
             echo "### Changed"
-            echo "- Updated Valkey to version $NEW_VERSION (from Chainguard latest image)"
-            echo ""
+            echo -e "$CHANGES"
             tail -n +3 CHANGELOG.md
           } > CHANGELOG.tmp && mv CHANGELOG.tmp CHANGELOG.md
+
+      - name: Generate PR title and description
+        if: steps.compare.outputs.needs_update == 'true'
+        id: pr-content
+        run: |
+          VALKEY_UPDATE="${{ steps.compare-valkey.outputs.valkey_needs_update }}"
+          EXPORTER_UPDATE="${{ steps.compare-exporter.outputs.exporter_needs_update }}"
+
+          # Generate title
+          if [ "$VALKEY_UPDATE" == "true" ] && [ "$EXPORTER_UPDATE" == "true" ]; then
+            TITLE="chore: update Valkey and redis-exporter"
+            BRANCH="auto-update-valkey-exporter"
+          elif [ "$VALKEY_UPDATE" == "true" ]; then
+            TITLE="chore: update Valkey to ${{ steps.get-version.outputs.detected_version }}"
+            BRANCH="auto-update-valkey-${{ steps.get-version.outputs.detected_version }}"
+          else
+            TITLE="chore: update redis-exporter to ${{ steps.get-exporter-version.outputs.detected_exporter_version }}"
+            BRANCH="auto-update-exporter-${{ steps.get-exporter-version.outputs.detected_exporter_version }}"
+          fi
+
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
         if: steps.compare.outputs.needs_update == 'true'
@@ -106,27 +210,29 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: |
-            chore: update Valkey to version ${{ steps.get-version.outputs.detected_version }}
+            ${{ steps.pr-content.outputs.title }}
 
-            - Updated appVersion from ${{ steps.current-version.outputs.current_version }} to ${{ steps.get-version.outputs.detected_version }}
-            - Automatically detected from cgr.dev/chainguard/valkey:latest
+            Updates:
+            ${{ steps.compare-valkey.outputs.valkey_needs_update == 'true' && format('- Valkey: {0} → {1}', steps.current-version.outputs.current_version, steps.get-version.outputs.detected_version) || '' }}
+            ${{ steps.compare-exporter.outputs.exporter_needs_update == 'true' && format('- Redis-exporter: {0} → {1}', steps.current-exporter-version.outputs.current_exporter_version, steps.get-exporter-version.outputs.detected_exporter_version) || '' }}
 
             Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
-          branch: auto-update-valkey-${{ steps.get-version.outputs.detected_version }}
+          branch: ${{ steps.pr-content.outputs.branch }}
           delete-branch: true
-          title: "chore: update Valkey to version ${{ steps.get-version.outputs.detected_version }}"
+          title: ${{ steps.pr-content.outputs.title }}
           body: |
-            ## 🤖 Automated Valkey Version Update
+            ## 🤖 Automated Version Update
 
             This PR was automatically created by the version checker workflow.
 
             ### Changes
-            - **Valkey version**: `${{ steps.current-version.outputs.current_version }}` → `${{ steps.get-version.outputs.detected_version }}`
-            - **Source**: Detected from `cgr.dev/chainguard/valkey:latest`
+            ${{ steps.compare-valkey.outputs.valkey_needs_update == 'true' && format('- **Valkey**: `{0}` → `{1}` (from Chainguard latest)', steps.current-version.outputs.current_version, steps.get-version.outputs.detected_version) || '' }}
+            ${{ steps.compare-exporter.outputs.exporter_needs_update == 'true' && format('- **Redis-exporter**: `{0}` → `{1}` (from GitHub releases)', steps.current-exporter-version.outputs.current_exporter_version, steps.get-exporter-version.outputs.detected_exporter_version) || '' }}
             - **Chart version**: Bumped patch version
 
             ### Verification
-            The version was detected by pulling the latest Chainguard Valkey image and running `--version`.
+            ${{ steps.compare-valkey.outputs.valkey_needs_update == 'true' && '- Valkey version detected from `cgr.dev/chainguard/valkey:latest`' || '' }}
+            ${{ steps.compare-exporter.outputs.exporter_needs_update == 'true' && '- Redis-exporter version from GitHub API (oliver006/redis_exporter latest release)' || '' }}
 
             ### Next Steps
             - Review the changes
@@ -143,7 +249,15 @@ jobs:
       - name: Summary
         run: |
           if [ "${{ steps.compare.outputs.needs_update }}" == "true" ]; then
-            echo "✅ Version update PR created: ${{ steps.current-version.outputs.current_version }} → ${{ steps.get-version.outputs.detected_version }}"
+            echo "✅ Version update PR created"
+            if [ "${{ steps.compare-valkey.outputs.valkey_needs_update }}" == "true" ]; then
+              echo "   - Valkey: ${{ steps.current-version.outputs.current_version }} → ${{ steps.get-version.outputs.detected_version }}"
+            fi
+            if [ "${{ steps.compare-exporter.outputs.exporter_needs_update }}" == "true" ]; then
+              echo "   - Redis-exporter: ${{ steps.current-exporter-version.outputs.current_exporter_version }} → ${{ steps.get-exporter-version.outputs.detected_exporter_version }}"
+            fi
           else
-            echo "✅ No update needed. Current version ${{ steps.current-version.outputs.current_version }} is up to date."
+            echo "✅ No updates needed"
+            echo "   - Valkey: ${{ steps.current-version.outputs.current_version }} (up to date)"
+            echo "   - Redis-exporter: ${{ steps.current-exporter-version.outputs.current_exporter_version }} (up to date)"
           fi

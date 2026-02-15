@@ -2,7 +2,7 @@ apiVersion: v2
 name: valkey
 description: Valkey is an open source, high-performance data structure server compatible with Redis. It supports strings, hashes, lists, sets, and sorted sets.
 type: application
-version: 0.2.2
+version: 0.2.3
 appVersion: "9.0.2"
 annotations:
   artifacthub.io/signKey: |
@@ -21,20 +21,22 @@ annotations:
     - name: wolfi-base
       image: cgr.dev/chainguard/wolfi-base:latest
     - name: redis-exporter
-      image: cgr.dev/chainguard/prometheus-redis-exporter:latest
+      image: docker.io/oliver006/redis_exporter:v1.81.0
     - name: kubectl
       image: cgr.dev/chainguard/kubectl:latest
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
-    - kind: security
-      description: Switch to Chainguard images for zero CVE (valkey, kubectl, wolfi-base, prometheus-redis-exporter)
+    - kind: changed
+      description: Update redis-exporter to v1.81.0 (from v1.80.0)
+    - kind: changed
+      description: Remove bash dependency from metrics exporter templates
+    - kind: changed
+      description: Switch to Chainguard images for zero CVE (valkey, kubectl, wolfi-base)
     - kind: changed
       description: Update container user from 999 to 65532 (Chainguard default)
     - kind: changed
       description: Simplify health check scripts for distroless compatibility
-    - kind: changed
-      description: Update pre-upgrade hook to work without shell
     - kind: added
       description: Automated version checking workflow for weekly updates
 keywords:

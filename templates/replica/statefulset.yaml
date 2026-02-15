@@ -222,14 +222,12 @@ spec:
           {{- if .Values.metrics.containerSecurityContext.enabled }}
           securityContext: {{- omit .Values.metrics.containerSecurityContext "enabled" | toYaml | nindent 12 }}
           {{- end }}
-          command:
-            - /bin/bash
-            - -c
-            - |
-              if [[ -f '/secrets/valkey-password' ]]; then
-                export REDIS_PASSWORD=$(cat /secrets/valkey-password)
-              fi
-              redis_exporter{{- range $key, $value := .Values.metrics.extraArgs }} --{{ $key }}={{ $value }}{{- end }}
+          {{- if .Values.metrics.extraArgs }}
+          args:
+            {{- range $key, $value := .Values.metrics.extraArgs }}
+            - --{{ $key }}={{ $value }}
+            {{- end }}
+          {{- end }}
           env:
             - name: REDIS_ALIAS
               value: {{ include "valkey.fullname" . }}

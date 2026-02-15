@@ -22,12 +22,12 @@ Automates chart releases:
 - Publishes to GitHub Pages (Helm repository)
 - Updates Artifact Hub
 
-### 3. Auto-Update Valkey Version (`update-valkey-version.yml`)
+### 3. Auto-Update Versions (`update-valkey-version.yml`)
 **Trigger**:
 - Weekly schedule (Mondays at 9:00 AM UTC)
 - Manual dispatch
 
-Automatically keeps Valkey version up-to-date:
+Automatically keeps Valkey and redis-exporter versions up-to-date:
 
 #### How It Works
 
@@ -49,19 +49,23 @@ graph TD
 #### What It Does
 
 1. **Version Detection**
-   - Pulls the latest Chainguard Valkey image
-   - Runs `valkey-server --version` to detect the exact version
-   - Compares with current `appVersion` in `Chart.yaml`
+   - **Valkey**: Pulls `cgr.dev/chainguard/valkey:latest` and runs `--version`
+   - **Redis-exporter**: Queries GitHub API for latest `oliver006/redis_exporter` release
+   - Compares both with current versions in chart files
 
-2. **If Version Changed**
-   - Updates `appVersion` in `Chart.yaml` to the new version
+2. **If Any Version Changed**
+   - **Valkey update**: Updates `appVersion` in `Chart.yaml`
+   - **Exporter update**: Updates `values.yaml`, `values.schema.json`, and `Chart.yaml` annotations
    - Bumps the chart patch version (e.g., `0.2.0` → `0.2.1`)
-   - Adds entry to `CHANGELOG.md` with the version change
+   - Adds entry to `CHANGELOG.md` with version changes
    - Creates a pull request with all changes
 
 3. **Pull Request Contents**
-   - Clear title: `chore: update Valkey to version X.Y.Z`
-   - Detailed body with old → new version info
+   - Dynamic title based on what updated:
+     - `chore: update Valkey to X.Y.Z` (Valkey only)
+     - `chore: update redis-exporter to X.Y.Z` (exporter only)
+     - `chore: update Valkey and redis-exporter` (both)
+   - Detailed body with old → new version info for each component
    - Labeled as `automated`, `version-update`, `dependencies`
    - Ready for review and merge
 
@@ -84,11 +88,12 @@ This is useful when you want to check for updates immediately instead of waiting
 #### Why This Approach?
 
 **Benefits:**
-- ✅ Chart stays current with latest Valkey releases
+- ✅ Chart stays current with latest Valkey and redis-exporter releases
 - ✅ Security updates are tracked and applied quickly
 - ✅ Full transparency via pull requests
 - ✅ Human review before changes are published
 - ✅ Automatic changelog maintenance
+- ✅ Both core application and metrics tooling kept in sync
 
 **Trade-offs:**
 - ⚠️ Chainguard free tier only provides `latest` tag

@@ -5,16 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.2] - 2026-02-15
+## [0.2.3] - 2026-02-15
 
-### Security
-- **CRITICAL**: Switch redis-exporter to Chainguard image (eliminates 6 CVEs: 1 Critical, 4 High, 1 Medium)
-- Changed from `docker.io/oliver006/redis_exporter:v1.80.0` to `cgr.dev/chainguard/prometheus-redis-exporter:latest`
+### Changed
+- Update redis-exporter from `v1.80.0` to `v1.81.0` (latest stable release)
+- Remove bash dependency from metrics exporter in replica and sentinel templates
+- Metrics exporter now uses native entrypoint instead of bash wrapper (cleaner, more portable)
+- Simplified metrics configuration across all deployment modes
 
 ### Added
 - Automated weekly version checking workflow for Valkey
 - Documentation for image versioning strategy
 - Complete CHANGELOG.md with release history
+
+### Fixed
+- Remove redundant password configuration in metrics exporter (was configured twice)
+
+### Note
+- Chainguard `prometheus-redis-exporter` image requires authentication (not in public free tier)
+- Using `oliver006/redis_exporter:v1.81.0` for public accessibility
+- Template improvements support both oliver006 and distroless images
 
 ## [0.2.1] - 2026-02-15
 

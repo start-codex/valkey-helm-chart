@@ -523,15 +523,15 @@
           "properties": {
             "registry": {
               "type": "string",
-              "default": "cgr.dev"
+              "default": "docker.io"
             },
             "repository": {
               "type": "string",
-              "default": "chainguard/prometheus-redis-exporter"
+              "default": "oliver006/redis_exporter"
             },
             "tag": {
               "type": "string",
-              "default": "latest"
+              "default": "v1.81.0"
             },
             "pullPolicy": {
               "type": "string",
