@@ -2,7 +2,7 @@ apiVersion: v2
 name: valkey
 description: Valkey is an open source, high-performance data structure server compatible with Redis. It supports strings, hashes, lists, sets, and sorted sets.
 type: application
-version: 0.2.3
+version: 0.2.4
 appVersion: "9.0.2"
 annotations:
   artifacthub.io/signKey: |
