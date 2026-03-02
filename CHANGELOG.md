@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.2.7] - 2026-03-02
+
+### Changed
+- Updated redis-exporter from  to v1.81.0
+
+
 ## [0.2.6] - 2026-03-02
 
 ### Changed
