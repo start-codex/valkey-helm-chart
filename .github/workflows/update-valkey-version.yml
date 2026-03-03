@@ -75,8 +75,12 @@ jobs:
       - name: Get current redis-exporter version from values.yaml
         id: current-exporter-version
         run: |
-          # Extract tag from metrics section (more robust method)
-          CURRENT=$(awk '/^metrics:/,/^[a-z]+:/ {if (/^\s+tag:/) {print $2; exit}}' values.yaml | tr -d '"')
+          # Extract tag from metrics section.
+          # Note: avoid using the range pattern /^metrics:/,/^[a-z]+:/ because
+          # "metrics:" matches both the start and end pattern simultaneously in awk,
+          # causing the range to open and close on the same line (CURRENT always empty → infinite loop).
+          # Also, \s is not POSIX awk; use "^ +" instead.
+          CURRENT=$(awk '/^metrics:/{found=1; next} found && /^[a-z]/{exit} found && /^ +tag:/{gsub(/"/, "", $2); print $2; exit}' values.yaml)
           echo "current_exporter_version=$CURRENT" >> $GITHUB_OUTPUT
           echo "Current redis-exporter version: $CURRENT"
 
