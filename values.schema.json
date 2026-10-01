@@ -531,7 +531,7 @@
             },
             "tag": {
               "type": "string",
-              "default": "v1.92.0"
+              "default": "v1.92.1"
             },
             "pullPolicy": {
               "type": "string",
