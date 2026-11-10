@@ -72,7 +72,10 @@ data:
     [[ -f $VALKEY_PASSWORD_FILE ]] && export VALKEY_PASSWORD="$(< "${VALKEY_PASSWORD_FILE}")"
     [[ -n "$VALKEY_PASSWORD" ]] && export VALKEYCLI_AUTH="$VALKEY_PASSWORD"
 {{- end }}
-    SENTINEL_PORT=${VALKEY_SENTINEL_PORT:-26379}
+    # A Service named valkey-sentinel makes Kubernetes set VALKEY_SENTINEL_PORT
+    # to a tcp:// URL (enableServiceLinks defaults to true). The chart publishes
+    # the numeric port as VALKEY_SENTINEL_PORT_NUMBER.
+    SENTINEL_PORT=${VALKEY_SENTINEL_PORT_NUMBER:-26379}
     response=$(valkey-cli -h localhost -p $SENTINEL_PORT ping 2>&1)
     if [ "$response" != "PONG" ]; then
       echo "$response"
