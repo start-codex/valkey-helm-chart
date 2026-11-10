@@ -2,7 +2,7 @@ apiVersion: v2
 name: valkey
 description: Valkey is an open source, high-performance data structure server compatible with Redis. It supports strings, hashes, lists, sets, and sorted sets.
 type: application
-version: 0.3.5
+version: 0.3.6
 appVersion: "9.1.2"
 annotations:
   artifacthub.io/signKey: |
@@ -28,7 +28,7 @@ annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
     - kind: fixed
-      description: The bounded wait for a reachable master now measures wall clock instead of counting pauses, in both the master and the replica startup loops. The counter reached 30 while the clock was at 97 seconds, so a 70-second limit would not have fired for about four minutes
+      description: Sentinel probes read VALKEY_SENTINEL_PORT_NUMBER. With service links enabled, a Service named valkey-sentinel injects VALKEY_SENTINEL_PORT as a tcp:// URL, and ping_sentinel.sh passed that URL to valkey-cli -p.
 keywords:
   - valkey
   - redis

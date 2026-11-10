@@ -1,6 +1,15 @@
 # Changelog
 
 
+## [0.3.6] - 2026-11-10
+
+### Fixed
+- Sentinel startup, liveness, and readiness probes read `VALKEY_SENTINEL_PORT_NUMBER` instead of `VALKEY_SENTINEL_PORT`. The sentinel container already publishes the numeric port under that name, including a custom `sentinel.service.port`. `VALKEY_SENTINEL_PORT` is the variable Kubernetes fills in when `enableServiceLinks` is left at its default and a Service in the namespace is named `valkey-sentinel`: the value is `tcp://<cluster-ip>:26379`, and `valkey-cli -p` rejects it. This chart names the sentinel Service `{fullname}-sentinel`, so a release whose fullname is `valkey` (`helm install valkey`, or `fullnameOverride: valkey`) hits it on every sentinel pod. The script never set `VALKEY_SENTINEL_PORT` itself, so the `:-26379` fallback did not apply.
+
+### Why
+Reported on minikube v1.39.0. The probes exec `/health/ping_sentinel.sh`, so a bad port fails startup and both ongoing probes. Upgrading rolls the sentinel pods, which need the new script, and the replica pods too: both StatefulSets hash the whole health ConfigMap into `checksum/health`.
+
+
 ## [0.3.5] - 2026-10-04
 
 ### Changed
